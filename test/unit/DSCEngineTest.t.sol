@@ -7,8 +7,12 @@ import {DeployDSC} from "script/DeployDSC.s.sol";
 import {DecentralizedStableCoin} from "src/DecentralizedStableCoin.sol";
 import {DSCEngine} from "src/DSCEngine.sol";
 import {HelperConfig} from "script/HelperConfig.s.sol";
+import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 contract DSCEngineTest is Test {
+  address USER = makeAddr("user");
+  uint256 public constant AMOUNT_COLLATERAL = 10 ether;
+
   DeployDSC deployer;
   DecentralizedStableCoin dsc;
   DSCEngine engine;
@@ -49,7 +53,16 @@ contract DSCEngineTest is Test {
     uint256 usdAmount = 100 ether;
     uint256 expectedWeth = 0.05 ether;
     uint256 actualWeth = engine.getTokenAmountFromUsd(weth, usdAmount);
-
     assertEq(actualWeth, expectedWeth);
+  }
+
+  // DepositCollateral Tests
+  function testRevertsIfCollateralZero() public {
+    vm.startPrank(USER);
+    ERC20Mock(weth).approve(address(engine), AMOUNT_COLLATERAL);
+
+    vm.expectRevert(DSCEngine.DSCEngine__NeedsMoreThanZero.selector);
+    engine.depositCollateral(weth, 0);
+    vm.stopPrank();
   }
 }
