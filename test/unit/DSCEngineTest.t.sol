@@ -14,13 +14,28 @@ contract DSCEngineTest is Test {
   DSCEngine engine;
   HelperConfig config;
   address ethUsdPriceFeed;
+  address btcUsdPriceFeed;
   address weth;
 
   function setUp() public {
     deployer = new DeployDSC();
     (dsc, engine, config) = deployer.run();
-    (ethUsdPriceFeed,, weth,,) = config.activeNetworkConfig();
+    (ethUsdPriceFeed, btcUsdPriceFeed, weth,,) = config.activeNetworkConfig();
   }
+
+  // Constructor Tests
+  address[] public tokenAddresses;
+  address[] public priceFeedAddresses;
+
+  function testRevertsIfTokenLengthDoestMatchPriceFeeds() public {
+    tokenAddresses.push(weth);
+    priceFeedAddresses.push(ethUsdPriceFeed);
+    priceFeedAddresses.push(btcUsdPriceFeed);
+
+    vm.expectRevert(DSCEngine.DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength.selector);
+    new DSCEngine(tokenAddresses, priceFeedAddresses, address(dsc));
+  }
+
 
   // PriceFeed Tests
   function testGetUsdValue() public {
