@@ -30,6 +30,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {DecentralizedStableCoin} from "src/DecentralizedStableCoin.sol";
+import {OracleLib} from "src/libraries/OracleLib.sol";
 
 /**
  * @title DSCEngine
@@ -51,6 +52,8 @@ import {DecentralizedStableCoin} from "src/DecentralizedStableCoin.sol";
  * @notice This contract is VERY loosely based on the MakerDAO DSS (DAI) system.
  */
 contract DSCEngine is ReentrancyGuard {
+    using OracleLib for AggregatorV3Interface;
+
     ////////////////
     //   Errors  //
     ///////////////
@@ -235,7 +238,7 @@ contract DSCEngine is ReentrancyGuard {
     
     function getTokenAmountFromUsd(address token, uint256 usdAmountInWei) public view returns (uint256) {
       AggregatorV3Interface priceFeed = AggregatorV3Interface(sPriceFeeds[token]);
-      (, int256 price,,,) = priceFeed.latestRoundData();
+      (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
       return (usdAmountInWei * PRECISION / (uint256(price) * ADDITIONAL_FEED_PRECISION));
     }
 
@@ -263,6 +266,11 @@ contract DSCEngine is ReentrancyGuard {
       // $1000 ETH * 50 = 50,000 / 100 = 500
       // $1000 ETH * 50 = 50,000 / 100 = 500
       // $150 ETH * 50 = 7500 / 100 = (75 / 100) < 1
+
+      // if a user hasn't minted any DSC, they can't be liquidated -> return max value (infinite health)
+      if (totalDscMinted == 0) {
+        return type(uint256).max;
+      }
 
       return (collateralAdjustedForThreshold * LIQUIDATION_PRECISION) / totalDscMinted;
     }
@@ -294,18 +302,21 @@ contract DSCEngine is ReentrancyGuard {
 
     function getUsdValue(address token, uint256 amount) public view returns (uint256) {
       AggregatorV3Interface priceFeed = AggregatorV3Interface(sPriceFeeds[token]);
-      (,int256 price,,,) = priceFeed.latestRoundData();
+      (,int256 price,,,) = priceFeed.staleCheckLatestRoundData();
       // if 1 ETH = $1000, then the returned value from CL will be 1000 * 1e8 (decimal places of the priceFeed address)
   
       return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
     }
 
     function getAccountInformation(address user) external view returns (uint256 totalDscMinted, uint256 collateralValueInUsd) {
-      totalDscMinted = sDscMinted[user];
-      collateralValueInUsd = getAccountCollateralValueInUsd(user);
+      // totalDscMinted = sDscMinted[user];
+      // collateralValueInUsd = getAccountCollateralValueInUsd(user);
+      (totalDscMinted, collateralValueInUsd) = _getAccountInformation(user);
     }
 
-
+    function getCollateralBalanceOfUser(address user, address token) external view returns (uint256) {
+      return sCollateralDeposited[user][token];
+    }
 
     function getPrecision() external pure returns (uint256) {
         return PRECISION;
